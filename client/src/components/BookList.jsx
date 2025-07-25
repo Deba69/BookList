@@ -3,6 +3,7 @@ import axios from 'axios';
 import BookCard from './BookCard';
 import './BookList.css';
 
+const API_URL = 'http://localhost:5000/api';
 // Curated genres and their matching keywords
 const GENRE_MAP = [
   { name: 'Horror', keywords: ['horror', 'ghost', 'supernatural', 'vampire', 'monster'] },
@@ -47,6 +48,7 @@ const BookList = () => {
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const BOOKS_PER_PAGE = 20;
+  const [avgRatings, setAvgRatings] = useState({});
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -64,6 +66,11 @@ const BookList = () => {
         const genreSet = new Set();
         booksWithGenres.forEach(book => book.curatedGenres.forEach(g => genreSet.add(g)));
         setCuratedGenres(Array.from(genreSet).sort());
+
+        // Fetch average ratings for all books
+        const bookIds = booksWithGenres.map(b => b.key.replace(/^\/works\//, ''));
+        const ratingsRes = await axios.post(`${API_URL}/books/average-ratings`, { bookIds });
+        setAvgRatings(ratingsRes.data);
       } catch (err) {
         setError('Failed to load books.');
       } finally {
@@ -120,7 +127,7 @@ const BookList = () => {
       </div>
       <div className="booklist-grid">
         {paginatedBooks.map(book => (
-          <BookCard key={book.key} book={book} />
+          <BookCard key={book.key} book={book} avgRating={avgRatings[book.key.replace(/^\/works\//, '')]} />
         ))}
       </div>
       <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>

@@ -9,6 +9,8 @@ const mockReviews = [
   { id: 3, user: 'carol', rating: 5.0, text: 'A masterpiece.' },
 ];
 
+const API_URL = 'http://localhost:5000/api';
+
 const BookDetails = () => {
   const location = useLocation();
   const bookKey = location.pathname.replace('/books', '');
@@ -16,7 +18,8 @@ const BookDetails = () => {
   const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [reviews, setReviews] = useState(mockReviews);
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
@@ -56,6 +59,17 @@ const BookDetails = () => {
     fetchBook();
   }, [bookKey]);
 
+  const bookId = bookKey.replace(/^\/works\//, ''); // removes '/works/' from the start
+
+  // Fetch reviews from backend
+  useEffect(() => {
+    setLoadingReviews(true);
+    axios.get(`${API_URL}/books/${bookId}/reviews`)
+      .then(res => setReviews(res.data))
+      .catch(() => setReviews([]))
+      .finally(() => setLoadingReviews(false));
+  }, [bookId]);
+
   const handleAddReviewClick = () => {
     if (!user) {
       navigate('/signin');
@@ -64,19 +78,38 @@ const BookDetails = () => {
     setShowForm(true);
   };
 
-  const handleReviewSubmit = (e) => {
+  // Add review to backend
+  const handleReviewSubmit = async (e) => {
     e.preventDefault();
     if (!reviewText.trim()) return;
-    const newReview = {
-      id: Date.now(),
-      user: user.username,
-      rating: reviewRating,
-      text: reviewText.trim(),
-    };
-    setReviews([newReview, ...reviews]);
-    setShowForm(false);
-    setReviewText('');
-    setReviewRating(5);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_URL}/books/${bookId}/reviews`,
+        { rating: reviewRating, comment: reviewText.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setReviews([res.data, ...reviews]);
+      setShowForm(false);
+      setReviewText('');
+      setReviewRating(5);
+    } catch {
+      alert('Failed to submit review.');
+    }
+  };
+
+  // Delete review from backend
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Delete this review?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/books/${bookId}/reviews/${reviewId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setReviews(reviews.filter(r => r._id !== reviewId));
+    } catch {
+      alert('Failed to delete review.');
+    }
   };
 
   if (loading) return <div style={{ color: '#fff', textAlign: 'center', marginTop: 40 }}>Loading book details...</div>;
@@ -148,19 +181,27 @@ const BookDetails = () => {
           </form>
         )}
         <div>
-          {reviews.length === 0 && <div style={{ color: '#bbb' }}>No reviews yet.</div>}
-          {reviews.map(r => (
-            <div key={r.id} style={{ background: '#181818', marginBottom: 12, padding: 12, borderRadius: 6 }}>
-              <div style={{ color: '#FFD700', fontSize: 18, marginBottom: 4 }}>
-                {Array(Math.floor(r.rating)).fill().map((_, i) => <span key={i}>★</span>)}
-                {r.rating % 1 >= 0.5 && <span>★</span>}
-                {Array(5 - Math.ceil(r.rating)).fill().map((_, i) => <span key={i}>☆</span>)}
-                <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>{r.rating.toFixed(1)}</span>
+          {loadingReviews ? (
+            <div style={{ color: '#bbb' }}>Loading reviews...</div>
+          ) : reviews.length === 0 ? (
+            <div style={{ color: '#bbb' }}>No reviews yet.</div>
+          ) : (
+            reviews.map(r => (
+              <div key={r._id} style={{ background: '#181818', marginBottom: 12, padding: 12, borderRadius: 6, position: 'relative' }}>
+                <div style={{ color: '#FFD700', fontSize: 18, marginBottom: 4 }}>
+                  {Array(Math.floor(r.rating)).fill().map((_, i) => <span key={i}>★</span>)}
+                  {r.rating % 1 >= 0.5 && <span>★</span>}
+                  {Array(5 - Math.ceil(r.rating)).fill().map((_, i) => <span key={i}>☆</span>)}
+                  <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>{r.rating.toFixed(1)}</span>
+                </div>
+                <div style={{ color: '#fff', fontWeight: 'bold' }}>{r.username}</div>
+                <div style={{ color: '#ccc', marginTop: 4 }}>{r.comment}</div>
+                {user && r.username === user.username && (
+                  <button onClick={() => handleDeleteReview(r._id)} style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', color: '#FFD700', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Delete</button>
+                )}
               </div>
-              <div style={{ color: '#fff', fontWeight: 'bold' }}>{r.user}</div>
-              <div style={{ color: '#ccc', marginTop: 4 }}>{r.text}</div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

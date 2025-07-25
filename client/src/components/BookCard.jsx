@@ -9,12 +9,12 @@ function getRandomRating(key) {
   return Math.round(random * 10) / 10;
 }
 
-const BookCard = ({ book }) => {
+const BookCard = ({ book, avgRating }) => {
   const coverId = book.cover_id;
   const coverUrl = coverId
     ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`
     : 'https://via.placeholder.com/128x193?text=No+Cover';
-  const rating = getRandomRating(book.key);
+  const rating = typeof avgRating === 'number' ? avgRating : getRandomRating(book.key);
   const fullStars = Math.floor(rating);
   const halfStar = rating - fullStars >= 0.5;
   const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
