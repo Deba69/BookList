@@ -1,26 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+
+const mockReviews = [
+  { id: 1, user: 'alice', rating: 4.5, text: 'Loved this book!' },
+  { id: 2, user: 'bob', rating: 3.0, text: 'It was okay.' },
+  { id: 3, user: 'carol', rating: 5.0, text: 'A masterpiece.' },
+];
 
 const BookDetails = () => {
   const location = useLocation();
-  // Extract everything after /books as the key
   const bookKey = location.pathname.replace('/books', '');
   const [book, setBook] = useState(null);
   const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reviews, setReviews] = useState(mockReviews);
+  const [showForm, setShowForm] = useState(false);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchBook = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Ensure bookKey starts with a slash
         const key = bookKey.startsWith('/') ? bookKey : `/${bookKey}`;
         const res = await axios.get(`https://openlibrary.org${key}.json`);
         setBook(res.data);
-        // Fetch author details if available
         if (res.data && res.data.authors && res.data.authors.length > 0) {
           const authorPromises = res.data.authors.map(async (a) => {
             try {
@@ -35,12 +45,10 @@ const BookDetails = () => {
         } else {
           setAuthors([]);
         }
-        console.log('Book details:', res.data);
       } catch (err) {
         setError('Failed to load book details.');
         setBook(null);
         setAuthors([]);
-        console.error('Book details error:', err);
       } finally {
         setLoading(false);
       }
@@ -48,23 +56,37 @@ const BookDetails = () => {
     fetchBook();
   }, [bookKey]);
 
-  useEffect(() => {
-    console.log('Book:', book);
-    console.log('Authors:', authors);
-    console.log('Error:', error);
-  }, [book, authors, error]);
+  const handleAddReviewClick = () => {
+    if (!user) {
+      navigate('/signin');
+      return;
+    }
+    setShowForm(true);
+  };
+
+  const handleReviewSubmit = (e) => {
+    e.preventDefault();
+    if (!reviewText.trim()) return;
+    const newReview = {
+      id: Date.now(),
+      user: user.username,
+      rating: reviewRating,
+      text: reviewText.trim(),
+    };
+    setReviews([newReview, ...reviews]);
+    setShowForm(false);
+    setReviewText('');
+    setReviewRating(5);
+  };
 
   if (loading) return <div style={{ color: '#fff', textAlign: 'center', marginTop: 40 }}>Loading book details...</div>;
   if (error) return <div style={{ color: 'red', textAlign: 'center', marginTop: 40 }}>{error}</div>;
   if (!book) return <div style={{ color: '#fff', textAlign: 'center', marginTop: 40 }}>No book found.</div>;
 
-  // Get cover image
   const coverId = book.covers && book.covers.length > 0 ? book.covers[0] : null;
   const coverUrl = coverId
     ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`
     : 'https://via.placeholder.com/200x300?text=No+Cover';
-
-  // Get description
   const description = book.description
     ? typeof book.description === 'string'
       ? book.description
@@ -95,6 +117,50 @@ const BookDetails = () => {
             <strong>Description:</strong>
             <div style={{ marginTop: 4 }}>{description}</div>
           </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 32 }}>
+        <h2>Reviews</h2>
+        <button
+          onClick={handleAddReviewClick}
+          style={{ background: '#FFD700', color: '#232323', fontWeight: 'bold', border: 'none', borderRadius: 4, padding: '8px 20px', marginBottom: 16, cursor: 'pointer' }}
+        >
+          Add Review
+        </button>
+        {showForm && (
+          <form onSubmit={handleReviewSubmit} style={{ marginBottom: 24, background: '#181818', padding: 16, borderRadius: 8 }}>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ marginRight: 8 }}>Rating:</label>
+              <select value={reviewRating} onChange={e => setReviewRating(Number(e.target.value))} style={{ fontSize: 16, padding: 4, borderRadius: 4 }}>
+                {[5,4,3,2,1].map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <textarea
+              value={reviewText}
+              onChange={e => setReviewText(e.target.value)}
+              placeholder="Write your review..."
+              rows={3}
+              style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #444', background: '#232323', color: '#fff', marginBottom: 8 }}
+            />
+            <button type="submit" style={{ background: '#FFD700', color: '#232323', fontWeight: 'bold', border: 'none', borderRadius: 4, padding: '8px 20px', cursor: 'pointer' }}>
+              Submit
+            </button>
+          </form>
+        )}
+        <div>
+          {reviews.length === 0 && <div style={{ color: '#bbb' }}>No reviews yet.</div>}
+          {reviews.map(r => (
+            <div key={r.id} style={{ background: '#181818', marginBottom: 12, padding: 12, borderRadius: 6 }}>
+              <div style={{ color: '#FFD700', fontSize: 18, marginBottom: 4 }}>
+                {Array(Math.floor(r.rating)).fill().map((_, i) => <span key={i}>★</span>)}
+                {r.rating % 1 >= 0.5 && <span>★</span>}
+                {Array(5 - Math.ceil(r.rating)).fill().map((_, i) => <span key={i}>☆</span>)}
+                <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>{r.rating.toFixed(1)}</span>
+              </div>
+              <div style={{ color: '#fff', fontWeight: 'bold' }}>{r.user}</div>
+              <div style={{ color: '#ccc', marginTop: 4 }}>{r.text}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
